@@ -13,6 +13,11 @@ if not SetAutoloot then
 	return
 end
 
+-- Guard: skip if standalone SuperWowCombatLogger already loaded
+if RPLL and RPLL.VERSION then
+	return
+end
+
 local RPLL = RPLL
 RPLL.VERSION = 14
 RPLL.MAX_MESSAGE_LENGTH = 500
