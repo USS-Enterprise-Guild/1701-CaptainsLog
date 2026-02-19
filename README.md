@@ -1,53 +1,108 @@
 # 1701 Captain's Log
 
-Unified combat logging addon for USS Enterprise Guild on Turtle WoW. Bundles [SuperWowCombatLogger](https://github.com/Pepopo/SuperWowCombatLogger) with automatic session management.
+World of Warcraft 1.12.1 addon for Turtle WoW that combines:
+
+- `SuperWowCombatLogger` (combat log enrichment metadata)
+- `Captain's Log` session control (auto start/stop + session markers)
+
+The addon is designed for guild log collection and upload workflows.
 
 ## Requirements
 
+- Turtle WoW (WoW client 1.12.1)
 - [SuperWoW](https://github.com/balakethelock/SuperWoW) client patch
 
-## Installation
+## Install
 
-1. Download or clone this repo into your `Interface/AddOns/` folder so it becomes `Interface/AddOns/1701-CaptainsLog/`
-2. Make sure SuperWoW is installed
-3. Launch the game — the addon appears as **1701 Addons - Captains Log** in the addon list
+1. Copy this folder into `Interface/AddOns/` so the final path is:
+`Interface/AddOns/1701-CaptainsLog/`
+2. Start game and ensure **1701 Addons - Captains Log** is enabled.
 
-Remove `AdvancedVanillaCombatLog` and `AdvancedVanillaCombatLog_Helper` from your addons folder if they exist.
+If present, remove old addons:
 
-## Features
+- `AdvancedVanillaCombatLog`
+- `AdvancedVanillaCombatLog_Helper`
 
-### Combat Logging (SuperWowCombatLogger)
+## Addon Hierarchy (Load Order)
 
-Enriches the WoW combat log with additional data for raid log analysis:
+`1701-CaptainsLog.toc` loads files in this order:
 
-- Armory data and pet ownership tracking
-- Totem spells credited to the casting shaman
-- Pet autoattacks logged under their owners
-- Tracks debuff casters (Faerie Fire, Sunder Armor, Curses, etc.)
-- Heal-over-time cast tracking (Rejuvenation, Regrowth, Renew)
+1. `RPLLCollector.lua`
+2. `SuperWowCombatLogger.lua`
+3. `CaptainsLog.lua`
 
-### Session Management (Captain's Log)
+### What each file does
 
-Automatically starts/stops combat logging when you enter/leave raid zones:
+- `RPLLCollector.lua`
+Creates the `RPLL` frame/event dispatcher if one does not already exist.
 
-- Writes `SESSION_START` and `SESSION_END` markers to the combat log
-- Supports all vanilla raids plus Turtle WoW custom raids (Karazhan Crypt, Hyjal Summit, Emerald Sanctum, etc.)
-- Manual toggle: `/captainslog`
+- `SuperWowCombatLogger.lua`
+Adds extended combat metadata. If standalone `SuperWowCombatLogger` is already loaded, the bundled copy exits early.
 
-## Coexistence with Standalone SuperWowCombatLogger
+- `CaptainsLog.lua`
+Controls session lifecycle:
+  - starts logging in configured raid zones
+  - writes `SESSION_START` and `SESSION_END` markers
+  - stops logging when leaving those zones
+  - provides `/captainslog` manual toggle
 
-If you have the standalone `SuperWowCombatLogger` addon installed separately, this addon detects it and skips loading its bundled copy. The session management (Captain's Log) still runs. You only need one or the other — this addon includes everything.
+## Behavior In Game
 
-## Companion Scripts
+### Automatic mode
 
-The `scripts/` folder contains helpers for uploading combat logs to Discord:
+- Enter configured raid zone: combat logging starts.
+- Leave configured raid zone: combat logging stops.
+- Session markers are written into `Logs/WoWCombatLog.txt`.
 
-- **`upload.bat`** — Double-click to run (Windows)
-- **`upload.ps1`** — PowerShell script that zips the combat log, archives the original, and opens Explorer for drag-and-drop upload
+Supported zones include vanilla raids and Turtle WoW custom raids, including:
 
-### Legacy Upload Tools
+- Karazhan Crypt
+- Hyjal Summit
+- Emerald Sanctum
+- Lower Karazhan Halls
+- Caverns of Time: Black Morass
+- Gilneas City
 
-The `legacy/` folder contains the original Python-based upload tools from SuperWowCombatLogger for use with monkeylogs/turtlogs.
+### Manual mode
+
+- `/captainslog` toggles logging immediately in your current zone.
+
+## Upload Workflow
+
+Use the scripts in `scripts/` after your raid:
+
+- `upload.bat` (recommended): launcher for Windows users.
+- `upload.ps1`: core script.
+
+### What upload script does
+
+1. Finds Turtle WoW path automatically by walking up from the addon folder (`.../Interface/AddOns/1701-CaptainsLog/scripts` -> `.../TurtleWoW`).
+2. Falls back to common install paths.
+3. Prompts for path only if auto-detection fails.
+4. Reads `Logs/WoWCombatLog.txt`.
+5. Creates zip in `Logs/uploads/` as `CaptainsLog-YYYY-MM-DD-HHmm.zip`.
+6. Rotates original log to `WoWCombatLog-YYYY-MM-DD-HHmm.bak`.
+7. Opens Explorer with the new zip selected for drag-and-drop upload.
+
+## Why use `upload.bat` instead of double-clicking `.ps1`
+
+On many Windows setups, PowerShell script execution is restricted by policy or signing settings.  
+`upload.bat` handles this by launching PowerShell with a process-scoped bypass and runtime fallback (`powershell.exe` then `pwsh.exe`).
+
+## Troubleshooting
+
+- "SuperWoW required" message in game:
+SuperWoW is missing or not active.
+
+- No combat log file found:
+Make sure logging started (`/captainslog`) and verify `Logs/WoWCombatLog.txt` exists.
+
+- Upload script asks for path unexpectedly:
+Confirm addon is installed under `.../TurtleWoW/Interface/AddOns/1701-CaptainsLog/`.
+
+## Legacy Tools
+
+`legacy/` contains original Python-based tooling from SuperWowCombatLogger for monkeylogs/turtlogs workflows.
 
 ## Credits
 

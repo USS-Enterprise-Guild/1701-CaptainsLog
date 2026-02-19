@@ -5,8 +5,9 @@
 if not RPLL then
     RPLL = CreateFrame("Frame", "RPLL")
     RPLL:SetScript("OnEvent", function()
-        if this[event] then
-            this[event](arg1, arg2, arg3, arg4)
+        local handler = this[event]
+        if type(handler) == "function" then
+            handler(arg1, arg2, arg3, arg4)
         end
     end)
 end

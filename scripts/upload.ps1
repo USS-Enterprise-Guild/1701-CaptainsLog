@@ -2,30 +2,53 @@
 # Finds the TurtleWoW combat log, zips it, archives the original,
 # and opens Explorer so you can drag the zip into #combat-logs on Discord.
 
+function Get-DetectedWowPath {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $current = Resolve-Path $scriptDir
+
+    while ($current) {
+        $currentPath = $current.Path
+        $logsPath = Join-Path $currentPath "Logs"
+        if (Test-Path $logsPath) {
+            return $currentPath
+        }
+
+        $parentPath = Split-Path -Parent $currentPath
+        if ($parentPath -eq $currentPath) {
+            break
+        }
+        $current = Resolve-Path $parentPath
+    }
+
+    return $null
+}
+
 $CommonPaths = @(
     "C:\Games\TurtleWoW",
     "C:\TurtleWoW",
     "D:\Games\TurtleWoW",
-    "$env:PROGRAMFILES\TurtleWoW"
+    (Join-Path $env:PROGRAMFILES "TurtleWoW")
 )
 
-$WowPath = $null
-foreach ($path in $CommonPaths) {
-    if (Test-Path "$path\Logs") {
-        $WowPath = $path
-        break
+$WowPath = Get-DetectedWowPath
+if (-not $WowPath) {
+    foreach ($path in $CommonPaths) {
+        if (Test-Path (Join-Path $path "Logs")) {
+            $WowPath = $path
+            break
+        }
     }
 }
 
 if (-not $WowPath) {
     $WowPath = Read-Host "Enter your TurtleWoW installation path"
-    if (-not (Test-Path "$WowPath\Logs")) {
-        Write-Host "Logs folder not found at $WowPath\Logs" -ForegroundColor Red
+    if (-not (Test-Path (Join-Path $WowPath "Logs"))) {
+        Write-Host "Logs folder not found at $(Join-Path $WowPath 'Logs')" -ForegroundColor Red
         exit 1
     }
 }
 
-$LogFile = "$WowPath\Logs\WoWCombatLog.txt"
+$LogFile = Join-Path $WowPath "Logs\WoWCombatLog.txt"
 
 if (-not (Test-Path $LogFile)) {
     Write-Host "Combat log not found at $LogFile" -ForegroundColor Red
@@ -34,20 +57,20 @@ if (-not (Test-Path $LogFile)) {
 }
 
 $DateStr = Get-Date -Format "yyyy-MM-dd-HHmm"
-$OutDir = "$WowPath\Logs\uploads"
+$OutDir = Join-Path $WowPath "Logs\uploads"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 
-$ZipPath = "$OutDir\CaptainsLog-$DateStr.zip"
+$ZipPath = Join-Path $OutDir "CaptainsLog-$DateStr.zip"
 Compress-Archive -Path $LogFile -DestinationPath $ZipPath -Force
 Write-Host "Zipped to: $ZipPath" -ForegroundColor Green
 
 # Archive the original log so a fresh one starts next session
-$BackupPath = "$WowPath\Logs\WoWCombatLog-$DateStr.bak"
+$BackupPath = Join-Path $WowPath "Logs\WoWCombatLog-$DateStr.bak"
 Move-Item $LogFile $BackupPath
 Write-Host "Original log archived to: $BackupPath" -ForegroundColor Yellow
 
 # Open Explorer with the zip selected for easy drag-and-drop
-explorer.exe /select, $ZipPath
+Start-Process explorer.exe -ArgumentList "/select,`"$ZipPath`""
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan

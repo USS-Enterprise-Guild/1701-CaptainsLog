@@ -10,7 +10,11 @@ if not CombatLogAdd then
 end
 
 local frame = CreateFrame("Frame")
-local isLogging = false
+local managedSession = false
+
+local LoggingCombat = LoggingCombat
+local GetRealZoneText = GetRealZoneText
+local date = date
 
 -- Raid zones: vanilla + Turtle WoW custom content
 local RAID_ZONES = {
@@ -32,7 +36,7 @@ local RAID_ZONES = {
 
 local function StartLogging(zone)
     LoggingCombat(1)
-    isLogging = true
+    managedSession = true
     CombatLogAdd("SESSION_START: " .. zone .. " " .. date("%Y-%m-%d %H:%M:%S"))
     DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Captain's Log]|r Combat logging started for " .. zone)
 end
@@ -40,29 +44,42 @@ end
 local function StopLogging()
     CombatLogAdd("SESSION_END: " .. date("%Y-%m-%d %H:%M:%S"))
     LoggingCombat(0)
-    isLogging = false
+    managedSession = false
     DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[Captain's Log]|r Combat logging stopped")
+end
+
+local function SyncZoneLogging()
+    local zone = GetRealZoneText()
+    if not zone or zone == "" then
+        return
+    end
+
+    if RAID_ZONES[zone] then
+        if not managedSession then
+            StartLogging(zone)
+        end
+    elseif managedSession then
+        StopLogging()
+    end
 end
 
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 frame:SetScript("OnEvent", function()
-    local zone = GetRealZoneText()
-    if RAID_ZONES[zone] and not isLogging then
-        StartLogging(zone)
-    elseif not RAID_ZONES[zone] and isLogging then
-        StopLogging()
-    end
+    SyncZoneLogging()
 end)
 
 -- Slash command: /captainslog — manually toggle combat logging
 SLASH_CAPTAINSLOG1 = "/captainslog"
 SlashCmdList["CAPTAINSLOG"] = function()
-    if isLogging then
+    if managedSession then
         StopLogging()
     else
         local zone = GetRealZoneText()
+        if not zone or zone == "" then
+            zone = "Unknown Zone"
+        end
         StartLogging(zone)
     end
 end
