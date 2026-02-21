@@ -3,8 +3,7 @@
 # and opens Explorer so you can drag the zip into #combat-logs on Discord.
 
 function Get-DetectedWowPath {
-    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-    $current = Resolve-Path $scriptDir
+    $current = Resolve-Path $PSScriptRoot
 
     while ($current) {
         $currentPath = $current.Path
@@ -14,7 +13,7 @@ function Get-DetectedWowPath {
         }
 
         $parentPath = Split-Path -Parent $currentPath
-        if ($parentPath -eq $currentPath) {
+        if ([string]::IsNullOrEmpty($parentPath) -or $parentPath -eq $currentPath) {
             break
         }
         $current = Resolve-Path $parentPath
