@@ -35,6 +35,13 @@ local function StartLogging(zone)
     LoggingCombat(1)
     managedSession = true
     CombatLogAdd("SESSION_START: " .. zone .. " " .. date("%Y-%m-%d %H:%M:%S"))
+    for i = 1, GetNumRaidMembers() do
+        local name, rank = GetRaidRosterInfo(i)
+        if rank == 2 then
+            CombatLogAdd("RAID_LEADER: " .. name .. " " .. date("%Y-%m-%d %H:%M:%S"))
+            break
+        end
+    end
     DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Captain's Log]|r Combat logging started for " .. zone)
 end
 
