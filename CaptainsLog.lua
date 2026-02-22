@@ -26,12 +26,9 @@ local RAID_ZONES = {
     ["Ruins of Ahn'Qiraj"] = true,
     ["Naxxramas"] = true,
     -- Turtle WoW custom raids
-    ["Karazhan Crypt"] = true,
-    ["Hyjal Summit"] = true,
     ["Emerald Sanctum"] = true,
     ["Lower Karazhan Halls"] = true,
-    ["Caverns of Time: Black Morass"] = true,
-    ["Gilneas City"] = true,
+    ["Tower of Karazhan"] = true,
 }
 
 local function StartLogging(zone)
@@ -63,11 +60,52 @@ local function SyncZoneLogging()
     end
 end
 
+local function OnCombatEnd()
+    if not managedSession then
+        return
+    end
+
+    local total = GetNumRaidMembers()
+    if total == 0 then
+        return
+    end
+
+    local alive = 0
+    local counted = {}
+    for i = 1, total do
+        local unit = "raid" .. i
+        if not UnitIsDeadOrGhost(unit) then
+            alive = alive + 1
+        end
+        counted[UnitName(unit)] = true
+    end
+
+    -- Include the player if not already counted via raid iteration
+    if not counted[UnitName("player")] then
+        total = total + 1
+        if not UnitIsDeadOrGhost("player") then
+            alive = alive + 1
+        end
+    end
+
+    local ts = date("%Y-%m-%d %H:%M:%S")
+    CombatLogAdd("COMBAT_END: " .. alive .. "/" .. total .. " " .. ts)
+
+    if alive <= 3 or alive / total < 0.10 then
+        CombatLogAdd("WIPE: " .. ts)
+    end
+end
+
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
 frame:SetScript("OnEvent", function()
-    SyncZoneLogging()
+    if event == "PLAYER_REGEN_ENABLED" then
+        OnCombatEnd()
+    else
+        SyncZoneLogging()
+    end
 end)
 
 -- Slash command: /captainslog — manually toggle combat logging
