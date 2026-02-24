@@ -86,11 +86,16 @@ local function StopLogging()
     DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[Captain's Log]|r Combat logging stopped")
 end
 
+local function NormalizeApostrophes(s)
+    return string.gsub(s, "\226\128\153", "'")
+end
+
 local function SyncZoneLogging()
     local zone = GetRealZoneText()
     if not zone or zone == "" then
         return
     end
+    zone = NormalizeApostrophes(zone)
 
     if RAID_ZONES[zone] then
         if not managedSession then
@@ -159,6 +164,6 @@ SlashCmdList["CAPTAINSLOG"] = function()
         if not zone or zone == "" then
             zone = "Unknown Zone"
         end
-        StartLogging(zone)
+        StartLogging(NormalizeApostrophes(zone))
     end
 end
