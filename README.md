@@ -11,6 +11,7 @@ The addon is designed for guild log collection and upload workflows.
 
 - Turtle WoW (WoW client 1.12.1)
 - [SuperWoW](https://github.com/balakethelock/SuperWoW) client patch
+- [BigWigs](https://github.com/pepopo978/BigWigs) (optional — enables boss encounter tracking)
 
 ## Install
 
@@ -43,6 +44,9 @@ Adds extended combat metadata. If standalone `SuperWowCombatLogger` is already l
 Controls session lifecycle:
   - starts logging in configured raid zones
   - writes `SESSION_START` and `SESSION_END` markers
+  - emits `RAID_LEADER` marker at session start
+  - tracks boss encounters via BigWigs integration (`ENCOUNTER_START`, `ENCOUNTER_END: KILL`, `ENCOUNTER_END: WIPE`)
+  - detects combat end and wipes (`COMBAT_END`, `WIPE`)
   - stops logging when leaving those zones
   - provides `/captainslog` manual toggle
 
@@ -53,6 +57,7 @@ Controls session lifecycle:
 - Enter configured raid zone: combat logging starts.
 - Leave configured raid zone: combat logging stops.
 - Session markers are written into `Logs/WoWCombatLog.txt`.
+- If BigWigs is installed, boss encounters are tracked automatically with pull, kill, and wipe markers.
 
 Supported zones include vanilla raids and Turtle WoW custom raids, including:
 

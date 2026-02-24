@@ -16,6 +16,38 @@ local LoggingCombat = LoggingCombat
 local GetRealZoneText = GetRealZoneText
 local date = date
 
+-- BigWigs encounter tracking (optional - only if BigWigs is loaded)
+local engagedBoss = nil
+
+if AceLibrary and AceLibrary:HasInstance("AceEvent-2.0") then
+    local AceEvent = AceLibrary("AceEvent-2.0")
+    local bwHandler = {}
+    AceEvent:embed(bwHandler)
+
+    function bwHandler:BigWigs_RecvSync(sync, rest, nick)
+        if not managedSession then return end
+        local ts = date("%Y-%m-%d %H:%M:%S")
+        if sync == "BossEngaged" and rest then
+            engagedBoss = rest
+            CombatLogAdd("ENCOUNTER_START: " .. rest .. " " .. ts)
+        elseif sync == "BossDeath" and rest then
+            engagedBoss = nil
+            CombatLogAdd("ENCOUNTER_END: KILL " .. rest .. " " .. ts)
+        end
+    end
+
+    function bwHandler:BigWigs_RebootModule(moduleName)
+        if not managedSession or not engagedBoss then return end
+        local ts = date("%Y-%m-%d %H:%M:%S")
+        CombatLogAdd("ENCOUNTER_END: WIPE " .. engagedBoss .. " " .. ts)
+        engagedBoss = nil
+    end
+
+    bwHandler:RegisterEvent("BigWigs_RecvSync")
+    bwHandler:RegisterEvent("BigWigs_RebootModule")
+    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Captain's Log]|r BigWigs detected, encounter tracking enabled")
+end
+
 -- Raid zones: vanilla + Turtle WoW custom content
 local RAID_ZONES = {
     -- Vanilla raids
@@ -35,11 +67,13 @@ local function StartLogging(zone)
     LoggingCombat(1)
     managedSession = true
     CombatLogAdd("SESSION_START: " .. zone .. " " .. date("%Y-%m-%d %H:%M:%S"))
-    for i = 1, GetNumRaidMembers() do
-        local name, rank = GetRaidRosterInfo(i)
-        if rank == 2 then
-            CombatLogAdd("RAID_LEADER: " .. name .. " " .. date("%Y-%m-%d %H:%M:%S"))
-            break
+    if GetRaidRosterInfo then
+        for i = 1, GetNumRaidMembers() do
+            local name, rank = GetRaidRosterInfo(i)
+            if rank == 2 and name then
+                CombatLogAdd("RAID_LEADER: " .. name .. " " .. date("%Y-%m-%d %H:%M:%S"))
+                break
+            end
         end
     end
     DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Captain's Log]|r Combat logging started for " .. zone)
