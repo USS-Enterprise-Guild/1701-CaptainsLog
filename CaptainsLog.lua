@@ -56,6 +56,7 @@ local RAID_ZONES = {
     ["Onyxia's Lair"] = true,
     ["Temple of Ahn'Qiraj"] = true,
     ["Ruins of Ahn'Qiraj"] = true,
+    ["Zul'Gurub"] = true,
     ["Naxxramas"] = true,
     -- Turtle WoW custom raids
     ["Emerald Sanctum"] = true,
