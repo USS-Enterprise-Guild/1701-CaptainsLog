@@ -10,63 +10,150 @@ if not CombatLogAdd then
 end
 
 local frame = CreateFrame("Frame")
-local managedSession = false
+local sessionMode = "idle" -- "idle" | "auto" | "manual"
+local sessionZone = nil
 
 local LoggingCombat = LoggingCombat
 local GetRealZoneText = GetRealZoneText
 local date = date
+local CHAT_PREFIX = "|cff00ff00[Captain's Log]|r "
+local StartLogging
+
+local function Trim(s)
+    if not s then
+        return ""
+    end
+    s = string.gsub(s, "^%s+", "")
+    s = string.gsub(s, "%s+$", "")
+    return s
+end
+
+local function SessionActive()
+    return sessionMode ~= "idle"
+end
+
+local function NormalizeZoneName(name)
+    if not name or name == "" then
+        return nil, nil
+    end
+
+    -- Handle smart quotes and non-breaking spaces from client-provided zone strings.
+    name = string.gsub(name, "\226\128\152", "'")
+    name = string.gsub(name, "\226\128\153", "'")
+    name = string.gsub(name, "\194\160", " ")
+    name = string.gsub(name, "^%s+", "")
+    name = string.gsub(name, "%s+$", "")
+    if name == "" then
+        return nil, nil
+    end
+
+    return string.lower(name), name
+end
+
+local function EmitTransition(fromMode, toMode, reason, zone)
+    local ts = date("%Y-%m-%d %H:%M:%S")
+    local message = "SESSION_TRANSITION: " .. fromMode .. "->" .. toMode .. " reason=" .. reason
+    if zone and zone ~= "" then
+        message = message .. " zone=" .. zone
+    end
+    CombatLogAdd(message .. " " .. ts)
+end
+
+local function EmitZoneTransition(fromZone, toZone, reason)
+    local ts = date("%Y-%m-%d %H:%M:%S")
+    CombatLogAdd("ZONE_TRANSITION: from=" .. fromZone .. " to=" .. toZone .. " reason=" .. reason .. " " .. ts)
+end
 
 -- BigWigs encounter tracking (optional - only if BigWigs is loaded)
 local engagedBoss = nil
+local bwHandler = nil
+local bigWigsTrackingEnabled = false
 
-if AceLibrary and AceLibrary:HasInstance("AceEvent-2.0") then
+local function EnsureBigWigsTracking()
+    if bigWigsTrackingEnabled then
+        return true
+    end
+    if not AceLibrary or not AceLibrary:HasInstance("AceEvent-2.0") then
+        return false
+    end
+
     local AceEvent = AceLibrary("AceEvent-2.0")
-    local bwHandler = {}
-    AceEvent:embed(bwHandler)
+    if not bwHandler then
+        bwHandler = {}
+        AceEvent:embed(bwHandler)
 
-    function bwHandler:BigWigs_RecvSync(sync, rest, nick)
-        if not managedSession then return end
-        local ts = date("%Y-%m-%d %H:%M:%S")
-        if sync == "BossEngaged" and rest then
-            engagedBoss = rest
-            CombatLogAdd("ENCOUNTER_START: " .. rest .. " " .. ts)
-        elseif sync == "BossDeath" and rest then
+        function bwHandler:BigWigs_RecvSync(sync, rest, nick)
+            if sync == "BossEngaged" and rest and not SessionActive() then
+                local _, zoneText = NormalizeZoneName(GetRealZoneText())
+                local zone = zoneText or "Unknown Zone"
+                StartLogging(zone, "auto", "bigwigs_encounter_start")
+            end
+            if not SessionActive() then return end
+            local ts = date("%Y-%m-%d %H:%M:%S")
+            if sync == "BossEngaged" and rest then
+                engagedBoss = rest
+                CombatLogAdd("ENCOUNTER_START: " .. rest .. " " .. ts)
+            elseif sync == "BossDeath" and rest then
+                engagedBoss = nil
+                CombatLogAdd("ENCOUNTER_END: KILL " .. rest .. " " .. ts)
+            end
+        end
+
+        function bwHandler:BigWigs_RebootModule(moduleName)
+            if not SessionActive() or not engagedBoss then return end
+            local ts = date("%Y-%m-%d %H:%M:%S")
+            CombatLogAdd("ENCOUNTER_END: WIPE " .. engagedBoss .. " " .. ts)
             engagedBoss = nil
-            CombatLogAdd("ENCOUNTER_END: KILL " .. rest .. " " .. ts)
         end
     end
 
-    function bwHandler:BigWigs_RebootModule(moduleName)
-        if not managedSession or not engagedBoss then return end
-        local ts = date("%Y-%m-%d %H:%M:%S")
-        CombatLogAdd("ENCOUNTER_END: WIPE " .. engagedBoss .. " " .. ts)
-        engagedBoss = nil
+    if not bwHandler.__captainslog_registered then
+        bwHandler:RegisterEvent("BigWigs_RecvSync")
+        bwHandler:RegisterEvent("BigWigs_RebootModule")
+        bwHandler.__captainslog_registered = true
     end
 
-    bwHandler:RegisterEvent("BigWigs_RecvSync")
-    bwHandler:RegisterEvent("BigWigs_RebootModule")
-    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Captain's Log]|r BigWigs detected, encounter tracking enabled")
+    bigWigsTrackingEnabled = true
+    DEFAULT_CHAT_FRAME:AddMessage(CHAT_PREFIX .. "BigWigs detected, encounter tracking enabled")
+    return true
 end
 
+EnsureBigWigsTracking()
+
 -- Raid zones: vanilla + Turtle WoW custom content
-local RAID_ZONES = {
+local RAID_ZONE_NAMES = {
     -- Vanilla raids
-    ["Molten Core"] = true,
-    ["Blackwing Lair"] = true,
-    ["Onyxia's Lair"] = true,
-    ["Temple of Ahn'Qiraj"] = true,
-    ["Ruins of Ahn'Qiraj"] = true,
-    ["Zul'Gurub"] = true,
-    ["Naxxramas"] = true,
+    "Molten Core",
+    "Blackwing Lair",
+    "Onyxia's Lair",
+    "Temple of Ahn'Qiraj",
+    "Ruins of Ahn'Qiraj",
+    "Zul'Gurub",
+    "Naxxramas",
     -- Turtle WoW custom raids
-    ["Emerald Sanctum"] = true,
-    ["Lower Karazhan Halls"] = true,
-    ["Tower of Karazhan"] = true,
+    "Emerald Sanctum",
+    "Lower Karazhan Halls",
+    "Tower of Karazhan",
 }
 
-local function StartLogging(zone)
+local RAID_ZONES = {}
+for _, zoneName in ipairs(RAID_ZONE_NAMES) do
+    local zoneKey = NormalizeZoneName(zoneName)
+    RAID_ZONES[zoneKey] = zoneName
+end
+
+StartLogging = function(zone, mode, reason)
+    if mode ~= "manual" then
+        mode = "auto"
+    end
+    if not reason or reason == "" then
+        reason = "start"
+    end
+
+    EmitTransition(sessionMode, mode, reason, zone)
     LoggingCombat(1)
-    managedSession = true
+    sessionMode = mode
+    sessionZone = zone
     CombatLogAdd("SESSION_START: " .. zone .. " " .. date("%Y-%m-%d %H:%M:%S"))
     if GetRaidRosterInfo then
         for i = 1, GetNumRaidMembers() do
@@ -77,38 +164,103 @@ local function StartLogging(zone)
             end
         end
     end
-    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00[Captain's Log]|r Combat logging started for " .. zone)
+    DEFAULT_CHAT_FRAME:AddMessage(CHAT_PREFIX .. "Combat logging started for " .. zone)
 end
 
-local function StopLogging()
+local function StopLogging(reason)
+    if not SessionActive() then
+        return
+    end
+    if not reason or reason == "" then
+        reason = "stop"
+    end
+
+    EmitTransition(sessionMode, "idle", reason, sessionZone)
     CombatLogAdd("SESSION_END: " .. date("%Y-%m-%d %H:%M:%S"))
     LoggingCombat(0)
-    managedSession = false
+    sessionMode = "idle"
+    sessionZone = nil
+    engagedBoss = nil
     DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[Captain's Log]|r Combat logging stopped")
 end
 
-local function NormalizeApostrophes(s)
-    return string.gsub(s, "\226\128\153", "'")
+local function EnsureLoggingEnabled()
+    if SessionActive() and not LoggingCombat() then
+        LoggingCombat(1)
+    end
 end
 
 local function SyncZoneLogging()
-    local zone = GetRealZoneText()
-    if not zone or zone == "" then
+    local _, zoneText = NormalizeZoneName(GetRealZoneText())
+    local observedZone = zoneText or "Unknown Zone"
+
+    if SessionActive() and sessionZone ~= observedZone then
+        EmitZoneTransition(sessionZone, observedZone, "zone_change")
+        sessionZone = observedZone
+    end
+
+    if sessionMode == "manual" then
+        EnsureLoggingEnabled()
         return
     end
-    zone = NormalizeApostrophes(zone)
 
-    if RAID_ZONES[zone] then
-        if not managedSession then
-            StartLogging(zone)
+    if sessionMode == "idle" then
+        local zoneKey = NormalizeZoneName(observedZone)
+        local raidZone = zoneKey and RAID_ZONES[zoneKey] or nil
+        if raidZone then
+            StartLogging(raidZone, "auto", "zone_enter")
         end
-    elseif managedSession then
-        StopLogging()
+        return
+    end
+
+    EnsureLoggingEnabled()
+end
+
+local swclCompatibilityHooked = false
+local swclCompatibilityWarned = false
+
+local function EnsureSwclCompatibilityHook()
+    if swclCompatibilityHooked or not RPLL then
+        return
+    end
+
+    local wrapped = false
+
+    local function WrapHandler(name)
+        local key = "__captainslog_wrapped_" .. name
+        if RPLL[key] then
+            wrapped = true
+            return
+        end
+
+        local original = RPLL[name]
+        if type(original) ~= "function" then
+            return
+        end
+
+        RPLL[name] = function(...)
+            original(...)
+            SyncZoneLogging()
+            EnsureLoggingEnabled()
+        end
+        RPLL[key] = true
+        wrapped = true
+    end
+
+    WrapHandler("ZONE_CHANGED_NEW_AREA")
+    WrapHandler("UPDATE_INSTANCE_INFO")
+
+    if wrapped then
+        swclCompatibilityHooked = true
+        if IsAddOnLoaded and IsAddOnLoaded("SuperWowCombatLogger") and not swclCompatibilityWarned then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffffff00[Captain's Log]|r Standalone SuperWowCombatLogger detected; compatibility hook enabled")
+            swclCompatibilityWarned = true
+        end
     end
 end
 
 local function OnCombatEnd()
-    if not managedSession then
+    if not SessionActive() then
         return
     end
 
@@ -144,27 +296,77 @@ local function OnCombatEnd()
 end
 
 frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+frame:RegisterEvent("ZONE_CHANGED")
+frame:RegisterEvent("ZONE_CHANGED_INDOORS")
 frame:RegisterEvent("PLAYER_ENTERING_WORLD")
+frame:RegisterEvent("PLAYER_REGEN_DISABLED")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+frame:RegisterEvent("ADDON_LOADED")
+
+EnsureSwclCompatibilityHook()
 
 frame:SetScript("OnEvent", function()
+    if event == "ADDON_LOADED" then
+        if arg1 == "BigWigs" then
+            EnsureBigWigsTracking()
+        elseif arg1 == "SuperWowCombatLogger" then
+            EnsureSwclCompatibilityHook()
+        end
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        EnsureSwclCompatibilityHook()
+    end
+
+    SyncZoneLogging()
+    EnsureLoggingEnabled()
+
     if event == "PLAYER_REGEN_ENABLED" then
         OnCombatEnd()
-    else
-        SyncZoneLogging()
     end
 end)
 
 -- Slash command: /captainslog — manually toggle combat logging
 SLASH_CAPTAINSLOG1 = "/captainslog"
-SlashCmdList["CAPTAINSLOG"] = function()
-    if managedSession then
-        StopLogging()
-    else
-        local zone = GetRealZoneText()
-        if not zone or zone == "" then
+SlashCmdList["CAPTAINSLOG"] = function(msg)
+    local command = string.lower(Trim(msg))
+
+    if command == "status" then
+        local zone = sessionZone
+        if not zone then
+            local _, zoneText = NormalizeZoneName(GetRealZoneText())
+            zone = zoneText or "Unknown Zone"
+        end
+        local loggingState = LoggingCombat() and "on" or "off"
+        DEFAULT_CHAT_FRAME:AddMessage(CHAT_PREFIX .. "Status: mode=" .. sessionMode .. " zone=" .. zone .. " logging=" .. loggingState)
+        return
+    end
+
+    if sessionMode == "manual" then
+        StopLogging("slash_stop")
+        return
+    end
+
+    if sessionMode == "auto" then
+        EmitTransition("auto", "manual", "slash_manual_lock", sessionZone)
+        sessionMode = "manual"
+        EnsureLoggingEnabled()
+        DEFAULT_CHAT_FRAME:AddMessage(CHAT_PREFIX .. "Manual logging lock enabled")
+        return
+    end
+
+    if sessionMode == "idle" then
+        local zoneKey, zoneText = NormalizeZoneName(GetRealZoneText())
+        local zone = zoneText
+        if zoneKey and RAID_ZONES[zoneKey] then
+            zone = RAID_ZONES[zoneKey]
+        end
+        if not zone then
             zone = "Unknown Zone"
         end
-        StartLogging(NormalizeApostrophes(zone))
+        StartLogging(zone, "manual", "slash_start")
+    else
+        -- Safety fallback for unexpected mode values.
+        if SessionActive() then
+            StopLogging("slash_stop")
+        end
     end
 end
