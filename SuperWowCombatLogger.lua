@@ -63,7 +63,13 @@ local pairs = pairs
 local GetNumPartyMembers = GetNumPartyMembers
 local GetNumRaidMembers = GetNumRaidMembers
 local UnitIsPlayer = UnitIsPlayer
+local UnitClass = UnitClass
+local UnitRace = UnitRace
 local UnitSex = UnitSex
+local UnitExists = UnitExists
+local UnitInRaid = UnitInRaid
+local UnitInParty = UnitInParty
+local UnitAffectingCombat = UnitAffectingCombat
 local strlower = strlower
 local GetGuildInfo = GetGuildInfo
 local GetInventoryItemLink = GetInventoryItemLink
@@ -71,8 +77,10 @@ local strfind = string.find
 local Unknown = UNKNOWN
 local LoggingCombat = LoggingCombat
 local time = time
+local GetTime = GetTime
 local GetRealZoneText = GetRealZoneText
 local date = date
+local format = string.format
 local strjoin = string.join or function(delim, ...)
 	if type(arg) == 'table' then
 		return table.concat(arg, delim)
@@ -893,11 +901,11 @@ local function logPlayersInCombat()
 end
 
 RPLL:SetScript("OnUpdate", function()
-	if (this.limit or 1) > GetTime() then
+	local now = GetTime()
+	if (this.limit or 1) > now then
 		return
-	else
-		this.limit = GetTime() + 15 -- update combat state every 15 seconds in case logger isn't involved in the fight
 	end
+	this.limit = now + 15 -- update combat state every 15 seconds in case logger isn't involved in the fight
 	logPlayersInCombat()
 end)
 
@@ -1150,14 +1158,15 @@ end
 function RPLL:grab_unit_information(unit)
 	local unit_name = UnitName(unit)
 	if UnitIsPlayer(unit) and unit_name ~= nil and unit_name ~= Unknown then
-    -- Check rate limiting using simple timestamp cache
-    local last_update = this.PlayerInformation[unit_name]
-    if last_update ~= nil and time() - last_update <= 30 then
+		-- Check rate limiting using simple timestamp cache
+		local now = time()
+		local last_update = this.PlayerInformation[unit_name]
+		if last_update ~= nil and now - last_update <= 30 then
 			return
 		end
 
-    -- Gather all info into local table
-    local info = {}
+		-- Gather all info into local table
+		local info = {}
 		info["last_update_date"] = date("%d.%m.%y %H:%M:%S")
 		info["name"] = unit_name
 
@@ -1195,40 +1204,27 @@ function RPLL:grab_unit_information(unit)
 		end
 
 		-- Hero Class, race, sex
-		if UnitClass(unit) ~= nil then
-			local _, english_class = UnitClass(unit)
+		local _, english_class = UnitClass(unit)
+		if english_class ~= nil then
 			info["hero_class"] = english_class
 		end
-		if UnitRace(unit) ~= nil then
-			local _, en_race = UnitRace(unit)
+		local _, en_race = UnitRace(unit)
+		if en_race ~= nil then
 			info["race"] = en_race
 		end
-		if UnitSex(unit) ~= nil then
-			info["sex"] = UnitSex(unit)
+		local sex = UnitSex(unit)
+		if sex ~= nil then
+			info["sex"] = sex
 		end
 
 		-- Gear
-		local any_item = false
+		info["gear"] = {}
 		for i = 1, 19 do
-			if GetInventoryItemLink(unit, i) ~= nil then
-				any_item = true
-				break
-			end
-		end
-
-    info["gear"] = {}
-		if any_item then
-			for i = 1, 19 do
-				local inv_link = GetInventoryItemLink(unit, i)
-				if inv_link == nil then
-					info["gear"][i] = nil
-				else
-					local found, _, itemString = strfind(inv_link, "Hitem:(.+)\124h%[")
-					if found == nil then
-						info["gear"][i] = nil
-					else
-						info["gear"][i] = itemString
-					end
+			local inv_link = GetInventoryItemLink(unit, i)
+			if inv_link ~= nil then
+				local found, _, itemString = strfind(inv_link, "Hitem:(.+)\124h%[")
+				if found ~= nil then
+					info["gear"][i] = itemString
 				end
 			end
 		end
@@ -1260,8 +1256,8 @@ function RPLL:grab_unit_information(unit)
 			info["guid"] = guid
 		end
 
-    -- Update timestamp cache
-    this.PlayerInformation[unit_name] = time()
+		-- Update timestamp cache
+		this.PlayerInformation[unit_name] = now
 
 		log_combatant_info(info)
 	end

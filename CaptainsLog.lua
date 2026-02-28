@@ -89,11 +89,12 @@ local function EnsureBigWigsTracking()
                 StartLogging(zone, "auto", "bigwigs_encounter_start")
             end
             if not SessionActive() then return end
-            local ts = date("%Y-%m-%d %H:%M:%S")
             if sync == "BossEngaged" and rest then
+                local ts = date("%Y-%m-%d %H:%M:%S")
                 engagedBoss = rest
                 CombatLogAdd("ENCOUNTER_START: " .. rest .. " " .. ts)
             elseif sync == "BossDeath" and rest then
+                local ts = date("%Y-%m-%d %H:%M:%S")
                 engagedBoss = nil
                 CombatLogAdd("ENCOUNTER_END: KILL " .. rest .. " " .. ts)
             end
@@ -191,7 +192,7 @@ local function EnsureLoggingEnabled()
 end
 
 local function SyncZoneLogging()
-    local _, zoneText = NormalizeZoneName(GetRealZoneText())
+    local zoneKey, zoneText = NormalizeZoneName(GetRealZoneText())
     local observedZone = zoneText or "Unknown Zone"
 
     if SessionActive() and sessionZone ~= observedZone then
@@ -205,7 +206,6 @@ local function SyncZoneLogging()
     end
 
     if sessionMode == "idle" then
-        local zoneKey = NormalizeZoneName(observedZone)
         local raidZone = zoneKey and RAID_ZONES[zoneKey] or nil
         if raidZone then
             StartLogging(raidZone, "auto", "zone_enter")
@@ -245,7 +245,6 @@ local function EnsureSwclCompatibilityHook()
                 original()
             end
             SyncZoneLogging()
-            EnsureLoggingEnabled()
         end
         RPLL[key] = true
         wrapped = true
@@ -321,7 +320,6 @@ frame:SetScript("OnEvent", function()
     end
 
     SyncZoneLogging()
-    EnsureLoggingEnabled()
 
     if event == "PLAYER_REGEN_ENABLED" then
         OnCombatEnd()
