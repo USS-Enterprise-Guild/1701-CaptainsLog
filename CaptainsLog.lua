@@ -239,7 +239,11 @@ local function EnsureSwclCompatibilityHook()
         end
 
         RPLL[name] = function(...)
-            original(...)
+            if type(arg) == "table" then
+                original(unpack(arg))
+            else
+                original()
+            end
             SyncZoneLogging()
             EnsureLoggingEnabled()
         end
