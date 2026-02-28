@@ -1,22 +1,79 @@
 # 1701 Captain's Log
 
-World of Warcraft 1.12.1 addon for Turtle WoW that combines:
+`1701-CaptainsLog` is a WoW 1.12.1 (Turtle WoW) guild logging addon that bundles:
 
-- `SuperWowCombatLogger` (combat log enrichment metadata)
-- `Captain's Log` session control (auto start/stop + session markers)
+- **SuperWowCombatLogger (SWCL)** for enriched combat metadata
+- **Captain's Log wrapper logic** for session lifecycle, markers, and raid workflow quality-of-life
 
-The addon is designed for guild log collection and upload workflows.
+It is intended for guild raid logging with consistent data collection and simpler install/operations.
+
+## Attribution
+
+- **SuperWowCombatLogger** by Shino/Pepopo: <https://github.com/Pepopo/SuperWowCombatLogger>
+- **SuperWoW** by balakethelock: <https://github.com/balakethelock/SuperWoW>
+- **Captain's Log wrapper/session layer** by USS Enterprise Guild
+
+## Why We Package SWCL
+
+We bundle SWCL in this addon on purpose:
+
+1. Single install for raiders (`1701-CaptainsLog` only).
+2. Pinned, tested behavior for guild log pipelines.
+3. Fewer support issues from mixed addon versions.
+4. Wrapper features can integrate directly with SWCL output/flow.
+
+If standalone `SuperWowCombatLogger` is installed, the bundled copy exits early to avoid double-loading.
+
+## What Our Wrapper Adds (Beyond SWCL)
+
+Captain's Log adds session-aware control and metadata around SWCL logging:
+
+- Auto mode starts in configured raid zones.
+- Auto mode stops when leaving raid context (out of instance), while avoiding mid-raid stops on intra-instance/subzone transitions.
+- Manual mode toggle with `/captainslog`.
+- Status command with `/captainslog status`.
+- Session/transition markers:
+  - `SESSION_START`, `SESSION_END`
+  - `SESSION_TRANSITION` with reason metadata
+  - `ZONE_TRANSITION`
+  - `RAID_LEADER`
+  - `COMBAT_END`, `WIPE`
+  - `ENCOUNTER_START`, `ENCOUNTER_END: KILL`, `ENCOUNTER_END: WIPE` (via BigWigs if available)
+- Time metadata improvements:
+  - timezone offset (`%z`) appended when client runtime supports it
+  - `server_time=HH:MM` tag on zone enter/exit transitions and encounter start/end markers
+- Compatibility hook so Captain's Log can preserve managed session behavior when standalone SWCL handlers run.
+- Upload helper scripts for post-raid archive/rotation workflow.
+
+## SWCL Changes In This Packaged Version
+
+This repo keeps SWCL behavior largely intact, but includes practical integration/maintenance updates:
+
+- Packaging/load safety:
+  - guard for missing SuperWoW
+  - guard to skip bundled SWCL if standalone SWCL is already loaded
+- Runtime/hot-path cleanup with no intentional loss of cast detail:
+  - reduced redundant global/API lookups in hot paths
+  - simplified `OnUpdate` time checks
+  - reduced redundant player-info API calls
+  - one-pass gear extraction in combatant info collection
+- Timestamp metadata updates in SWCL-emitted records (where applicable) to include timezone offset when supported.
+
+Notes:
+
+- Upstream SWCL logic findings are documented in `docs/superwow-findings/`.
+- `legacy/` contains original/legacy tooling retained for compatibility workflows.
 
 ## Requirements
 
 - Turtle WoW (WoW client 1.12.1)
 - [SuperWoW](https://github.com/balakethelock/SuperWoW) client patch
-- [BigWigs](https://github.com/pepopo978/BigWigs) (optional — enables boss encounter tracking)
+- [BigWigs](https://github.com/pepopo978/BigWigs) (optional, for encounter tracking markers)
 
 ## Install
 
-1. Copy this folder into `Interface/AddOns/` so the final path is:
-`Interface/AddOns/1701-CaptainsLog/`
+1. Copy this folder to:
+   `Interface/AddOns/1701-CaptainsLog/`
 2. Start game and ensure **1701 Addons - Captains Log** is enabled.
 
 If present, remove old addons:
@@ -24,93 +81,60 @@ If present, remove old addons:
 - `AdvancedVanillaCombatLog`
 - `AdvancedVanillaCombatLog_Helper`
 
-## Addon Hierarchy (Load Order)
+## Load Order
 
-`1701-CaptainsLog.toc` loads files in this order:
+`1701-CaptainsLog.toc` loads:
 
 1. `RPLLCollector.lua`
 2. `SuperWowCombatLogger.lua`
 3. `CaptainsLog.lua`
 
-### What each file does
-
-- `RPLLCollector.lua`
-Creates the `RPLL` frame/event dispatcher if one does not already exist.
-
-- `SuperWowCombatLogger.lua`
-Adds extended combat metadata. If standalone `SuperWowCombatLogger` is already loaded, the bundled copy exits early.
-
-- `CaptainsLog.lua`
-Controls session lifecycle:
-  - starts logging in configured raid zones
-  - writes `SESSION_START` and `SESSION_END` markers
-  - emits `RAID_LEADER` marker at session start
-  - tracks boss encounters via BigWigs integration (`ENCOUNTER_START`, `ENCOUNTER_END: KILL`, `ENCOUNTER_END: WIPE`)
-  - detects combat end and wipes (`COMBAT_END`, `WIPE`)
-  - stops logging when leaving those zones
-  - provides `/captainslog` manual toggle
-
 ## Behavior In Game
 
 ### Automatic mode
 
-- Enter configured raid zone: combat logging starts.
-- Leave configured raid zone: combat logging stops.
-- Session markers are written into `Logs/WoWCombatLog.txt`.
-- If BigWigs is installed, boss encounters are tracked automatically with pull, kill, and wipe markers.
+- Enter configured raid zone: logging starts.
+- Leave raid context (outside instance): logging stops.
+- Intra-instance zone/subzone switches do not force auto stop.
 
-Supported zones include vanilla raids and Turtle WoW custom raids, including:
+Configured raid zones:
 
-- Karazhan Crypt
-- Hyjal Summit
+- Molten Core
+- Blackwing Lair
+- Onyxia's Lair
+- Temple of Ahn'Qiraj
+- Ruins of Ahn'Qiraj
+- Zul'Gurub
+- Naxxramas
 - Emerald Sanctum
 - Lower Karazhan Halls
-- Caverns of Time: Black Morass
-- Gilneas City
+- Tower of Karazhan
 
 ### Manual mode
 
-- `/captainslog` toggles logging immediately in your current zone.
+- `/captainslog` toggles mode/logging.
+- `/captainslog status` prints mode, zone, and logging state.
 
 ## Upload Workflow
 
-Use the scripts in `scripts/` after your raid:
+Use scripts in `scripts/` after raid:
 
-- `upload.bat` (recommended): launcher for Windows users.
-- `upload.ps1`: core script.
+- `upload.bat` (recommended launcher on Windows)
+- `upload.ps1` (core implementation)
 
-### What upload script does
+The upload flow:
 
-1. Finds Turtle WoW path automatically by walking up from the addon folder (`.../Interface/AddOns/1701-CaptainsLog/scripts` -> `.../TurtleWoW`).
-2. Falls back to common install paths.
-3. Prompts for path only if auto-detection fails.
-4. Reads `Logs/WoWCombatLog.txt`.
-5. Creates zip in `Logs/uploads/` as `CaptainsLog-YYYY-MM-DD-HHmm.zip`.
-6. Rotates original log to `WoWCombatLog-YYYY-MM-DD-HHmm.bak`.
-7. Opens Explorer with the new zip selected for drag-and-drop upload.
-
-## Why use `upload.bat` instead of double-clicking `.ps1`
-
-On many Windows setups, PowerShell script execution is restricted by policy or signing settings.  
-`upload.bat` handles this by launching PowerShell with a process-scoped bypass and runtime fallback (`powershell.exe` then `pwsh.exe`).
+1. Locates Turtle WoW path.
+2. Reads `Logs/WoWCombatLog.txt`.
+3. Creates `Logs/uploads/CaptainsLog-YYYY-MM-DD-HHmm.zip`.
+4. Rotates original log to `WoWCombatLog-YYYY-MM-DD-HHmm.bak`.
+5. Opens Explorer with the zip selected.
 
 ## Troubleshooting
 
-- "SuperWoW required" message in game:
-SuperWoW is missing or not active.
-
-- No combat log file found:
-Make sure logging started (`/captainslog`) and verify `Logs/WoWCombatLog.txt` exists.
-
-- Upload script asks for path unexpectedly:
-Confirm addon is installed under `.../TurtleWoW/Interface/AddOns/1701-CaptainsLog/`.
-
-## Legacy Tools
-
-`legacy/` contains original Python-based tooling from SuperWowCombatLogger for monkeylogs/turtlogs workflows.
-
-## Credits
-
-- **SuperWowCombatLogger** by [Shino/Pepopo](https://github.com/Pepopo/SuperWowCombatLogger)
-- **SuperWoW** by [balakethelock](https://github.com/balakethelock/SuperWoW)
-- **Captain's Log session management** by USS Enterprise Guild
+- **"SuperWoW required" message**:
+  SuperWoW is missing or inactive.
+- **No combat log file**:
+  start logging (`/captainslog`) and verify `Logs/WoWCombatLog.txt` exists.
+- **Upload path prompts unexpectedly**:
+  verify addon path is under `.../TurtleWoW/Interface/AddOns/1701-CaptainsLog/`.
