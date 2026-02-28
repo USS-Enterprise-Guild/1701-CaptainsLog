@@ -16,9 +16,23 @@ local sessionZone = nil
 local LoggingCombat = LoggingCombat
 local GetRealZoneText = GetRealZoneText
 local IsInInstance = IsInInstance
+local unpack = unpack or table.unpack
 local date = date
 local CHAT_PREFIX = "|cff00ff00[Captain's Log]|r "
 local StartLogging
+
+local supportsTimezoneOffset = nil
+
+local function FormatTimestamp()
+    if supportsTimezoneOffset == nil then
+        local probe = date("%z")
+        supportsTimezoneOffset = probe and probe ~= "" and probe ~= "%z"
+    end
+    if supportsTimezoneOffset then
+        return date("%Y-%m-%d %H:%M:%S %z")
+    end
+    return date("%Y-%m-%d %H:%M:%S")
+end
 
 local function Trim(s)
     if not s then
@@ -52,7 +66,7 @@ local function NormalizeZoneName(name)
 end
 
 local function EmitTransition(fromMode, toMode, reason, zone)
-    local ts = date("%Y-%m-%d %H:%M:%S")
+    local ts = FormatTimestamp()
     local message = "SESSION_TRANSITION: " .. fromMode .. "->" .. toMode .. " reason=" .. reason
     if zone and zone ~= "" then
         message = message .. " zone=" .. zone
@@ -61,7 +75,7 @@ local function EmitTransition(fromMode, toMode, reason, zone)
 end
 
 local function EmitZoneTransition(fromZone, toZone, reason)
-    local ts = date("%Y-%m-%d %H:%M:%S")
+    local ts = FormatTimestamp()
     CombatLogAdd("ZONE_TRANSITION: from=" .. fromZone .. " to=" .. toZone .. " reason=" .. reason .. " " .. ts)
 end
 
@@ -91,11 +105,11 @@ local function EnsureBigWigsTracking()
             end
             if not SessionActive() then return end
             if sync == "BossEngaged" and rest then
-                local ts = date("%Y-%m-%d %H:%M:%S")
+                local ts = FormatTimestamp()
                 engagedBoss = rest
                 CombatLogAdd("ENCOUNTER_START: " .. rest .. " " .. ts)
             elseif sync == "BossDeath" and rest then
-                local ts = date("%Y-%m-%d %H:%M:%S")
+                local ts = FormatTimestamp()
                 engagedBoss = nil
                 CombatLogAdd("ENCOUNTER_END: KILL " .. rest .. " " .. ts)
             end
@@ -103,7 +117,7 @@ local function EnsureBigWigsTracking()
 
         function bwHandler:BigWigs_RebootModule(moduleName)
             if not SessionActive() or not engagedBoss then return end
-            local ts = date("%Y-%m-%d %H:%M:%S")
+            local ts = FormatTimestamp()
             CombatLogAdd("ENCOUNTER_END: WIPE " .. engagedBoss .. " " .. ts)
             engagedBoss = nil
         end
@@ -156,12 +170,13 @@ StartLogging = function(zone, mode, reason)
     LoggingCombat(1)
     sessionMode = mode
     sessionZone = zone
-    CombatLogAdd("SESSION_START: " .. zone .. " " .. date("%Y-%m-%d %H:%M:%S"))
+    local ts = FormatTimestamp()
+    CombatLogAdd("SESSION_START: " .. zone .. " " .. ts)
     if GetRaidRosterInfo then
         for i = 1, GetNumRaidMembers() do
             local name, rank = GetRaidRosterInfo(i)
             if rank == 2 and name then
-                CombatLogAdd("RAID_LEADER: " .. name .. " " .. date("%Y-%m-%d %H:%M:%S"))
+                CombatLogAdd("RAID_LEADER: " .. name .. " " .. ts)
                 break
             end
         end
@@ -178,7 +193,7 @@ local function StopLogging(reason)
     end
 
     EmitTransition(sessionMode, "idle", reason, sessionZone)
-    CombatLogAdd("SESSION_END: " .. date("%Y-%m-%d %H:%M:%S"))
+    CombatLogAdd("SESSION_END: " .. FormatTimestamp())
     LoggingCombat(0)
     sessionMode = "idle"
     sessionZone = nil
@@ -300,7 +315,7 @@ local function OnCombatEnd()
         end
     end
 
-    local ts = date("%Y-%m-%d %H:%M:%S")
+    local ts = FormatTimestamp()
     CombatLogAdd("COMBAT_END: " .. alive .. "/" .. total .. " " .. ts)
 
     if alive <= 3 or alive / total < 0.10 then

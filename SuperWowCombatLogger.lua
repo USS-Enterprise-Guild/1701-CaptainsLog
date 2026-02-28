@@ -89,6 +89,19 @@ local strjoin = string.join or function(delim, ...)
 	end
 end
 
+local supportsTimezoneOffset = nil
+
+local function FormatLogDateTime()
+	if supportsTimezoneOffset == nil then
+		local probe = date("%z")
+		supportsTimezoneOffset = probe and probe ~= "" and probe ~= "%z"
+	end
+	if supportsTimezoneOffset then
+		return date("%d.%m.%y %H:%M:%S %z")
+	end
+	return date("%d.%m.%y %H:%M:%S")
+end
+
 -- cache what we've seen, SpellInfo (while fairly speedy) is _5x_ slower than keeping a table
 local spellCache = {}
 
@@ -1101,14 +1114,14 @@ RPLL.PET_STABLE_CLOSED = function()
 end
 
 RPLL.CHAT_MSG_LOOT = function(msg)
-	CombatLogAdd("LOOT: " .. date("%d.%m.%y %H:%M:%S") .. "&" .. msg)
+	CombatLogAdd("LOOT: " .. FormatLogDateTime() .. "&" .. msg)
 end
 
 RPLL.CHAT_MSG_SYSTEM = function(msg)
 	-- "Iseut trades item Libram of the Faithful to Milkpress."
 	local trade = string.find(msg, "^%w+ trades item")
 	if trade then
-		CombatLogAdd("LOOT_TRADE: " .. date("%d.%m.%y %H:%M:%S") .. "&" .. msg)
+		CombatLogAdd("LOOT_TRADE: " .. FormatLogDateTime() .. "&" .. msg)
 	end
 end
 
@@ -1144,14 +1157,14 @@ function RPLL:QueueRaidIds()
 	for i = 1, GetNumSavedInstances() do
 		local instance_name, instance_id = GetSavedInstanceInfo(i)
 		if zone == strlower(instance_name) then
-			CombatLogAdd("ZONE_INFO: " .. date("%d.%m.%y %H:%M:%S") .. "&" .. instance_name .. "&" .. instance_id)
+			CombatLogAdd("ZONE_INFO: " .. FormatLogDateTime() .. "&" .. instance_name .. "&" .. instance_id)
 			found = true
 			break
 		end
 	end
 
 	if found == false then
-		CombatLogAdd("ZONE_INFO: " .. date("%d.%m.%y %H:%M:%S") .. "&" .. zone .. "&0")
+		CombatLogAdd("ZONE_INFO: " .. FormatLogDateTime() .. "&" .. zone .. "&0")
 	end
 end
 
@@ -1167,7 +1180,7 @@ function RPLL:grab_unit_information(unit)
 
 		-- Gather all info into local table
 		local info = {}
-		info["last_update_date"] = date("%d.%m.%y %H:%M:%S")
+		info["last_update_date"] = FormatLogDateTime()
 		info["name"] = unit_name
 
 		-- Guild info
