@@ -16,6 +16,15 @@ local function containsValue(lines, expected)
     return false
 end
 
+local function containsText(lines, expected)
+    for _, line in ipairs(lines) do
+        if string.find(line, expected, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
 local function lastValue(lines)
     return lines[#lines]
 end
@@ -60,6 +69,9 @@ local function newHarness(zoneProvider, opts)
     _G.GetRealZoneText = zoneProvider
     _G.date = function()
         return "2026-02-25 20:00:00"
+    end
+    _G.GetGameTime = opts.getGameTime or function()
+        return 20, 0
     end
     _G.DEFAULT_CHAT_FRAME = {
         AddMessage = function(_, msg)
@@ -233,6 +245,42 @@ local function testSessionTransitionMarkersIncludeReasons()
     assertTrue(containsPrefix(ctx.combatLogLines, "SESSION_TRANSITION: manual->idle reason=slash_stop zone=Zul'Gurub "), "expected manual stop transition marker")
 end
 
+local function testZoneEnterTransitionIncludesServerTimeTag()
+    local zone = "Zul'Gurub"
+    local ctx = newHarness(function()
+        return zone
+    end, {
+        getGameTime = function()
+            return 21, 7
+        end,
+    })
+
+    dispatch(ctx, "ZONE_CHANGED_NEW_AREA")
+
+    assertTrue(
+        containsPrefix(ctx.combatLogLines, "SESSION_TRANSITION: idle->auto reason=zone_enter zone=Zul'Gurub server_time=21:07 "),
+        "expected zone_enter transition marker to include server_time tag"
+    )
+end
+
+local function testZoneExitTransitionIncludesServerTimeTag()
+    local zone = "Zul'Gurub"
+    local ctx = newHarness(function()
+        return zone
+    end, {
+        getGameTime = function()
+            return 21, 7
+        end,
+    })
+
+    dispatch(ctx, "ZONE_CHANGED_NEW_AREA")
+    zone = "Stormwind City"
+    dispatch(ctx, "ZONE_CHANGED_NEW_AREA")
+
+    assertTrue(containsText(ctx.combatLogLines, "SESSION_TRANSITION: auto->idle reason=zone_exit "), "expected zone_exit transition marker")
+    assertTrue(containsText(ctx.combatLogLines, "server_time=21:07"), "expected zone_exit transition marker to include server_time tag")
+end
+
 local function testHooksSwclZoneToggleToPreserveManagedSession()
     local zone = "Zul'Gurub"
     local swclCalled = 0
@@ -280,6 +328,36 @@ local function makeAceLibraryStub(registrations)
         end,
     })
     return library, aceEvent
+end
+
+local function testEncounterMarkersIncludeServerTimeTag()
+    local zone = "The Rock of Desolation"
+    local registrations = {}
+    local aceLibrary, aceEvent = makeAceLibraryStub(registrations)
+    local ctx = newHarness(function()
+        return zone
+    end, {
+        aceLibrary = aceLibrary,
+        getGameTime = function()
+            return 21, 7
+        end,
+    })
+
+    dispatch(ctx, "ADDON_LOADED", "BigWigs")
+    assertTrue(aceEvent.embeddedTarget ~= nil, "expected BigWigs handler target to be embedded")
+
+    local handler = aceEvent.embeddedTarget
+    handler:BigWigs_RecvSync("BossEngaged", "Echo of Medivh", "Test")
+    handler:BigWigs_RecvSync("BossDeath", "Echo of Medivh", "Test")
+
+    assertTrue(
+        containsPrefix(ctx.combatLogLines, "ENCOUNTER_START: Echo of Medivh server_time=21:07 "),
+        "expected ENCOUNTER_START marker to include server_time tag"
+    )
+    assertTrue(
+        containsPrefix(ctx.combatLogLines, "ENCOUNTER_END: KILL Echo of Medivh server_time=21:07 "),
+        "expected ENCOUNTER_END: KILL marker to include server_time tag"
+    )
 end
 
 local function testEnablesBigWigsTrackingOnAddonLoaded()
@@ -360,6 +438,9 @@ testManagedSessionReenablesLoggingIfTurnedOffExternally()
 testAutoSessionSwitchesWhenRaidZoneChanges()
 testStatusCommandReportsModeZoneAndLogging()
 testSessionTransitionMarkersIncludeReasons()
+testZoneEnterTransitionIncludesServerTimeTag()
+testZoneExitTransitionIncludesServerTimeTag()
+testEncounterMarkersIncludeServerTimeTag()
 testHooksSwclZoneToggleToPreserveManagedSession()
 testEnablesBigWigsTrackingOnAddonLoaded()
 testBigWigsEncounterCanStartSessionWhenIdle()

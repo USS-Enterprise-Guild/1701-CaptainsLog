@@ -16,6 +16,7 @@ local sessionZone = nil
 local LoggingCombat = LoggingCombat
 local GetRealZoneText = GetRealZoneText
 local IsInInstance = IsInInstance
+local GetGameTime = GetGameTime
 local unpack = unpack or table.unpack
 local date = date
 local CHAT_PREFIX = "|cff00ff00[Captain's Log]|r "
@@ -32,6 +33,17 @@ local function FormatTimestamp()
         return date("%Y-%m-%d %H:%M:%S %z")
     end
     return date("%Y-%m-%d %H:%M:%S")
+end
+
+local function FormatServerTimeTag()
+    if not GetGameTime then
+        return nil
+    end
+    local hour, minute = GetGameTime()
+    if not hour or not minute then
+        return nil
+    end
+    return "server_time=" .. string.format("%02d:%02d", hour, minute)
 end
 
 local function Trim(s)
@@ -71,6 +83,12 @@ local function EmitTransition(fromMode, toMode, reason, zone)
     if zone and zone ~= "" then
         message = message .. " zone=" .. zone
     end
+    if reason == "zone_enter" or reason == "zone_exit" then
+        local serverTimeTag = FormatServerTimeTag()
+        if serverTimeTag then
+            message = message .. " " .. serverTimeTag
+        end
+    end
     CombatLogAdd(message .. " " .. ts)
 end
 
@@ -106,19 +124,34 @@ local function EnsureBigWigsTracking()
             if not SessionActive() then return end
             if sync == "BossEngaged" and rest then
                 local ts = FormatTimestamp()
+                local serverTimeTag = FormatServerTimeTag()
                 engagedBoss = rest
-                CombatLogAdd("ENCOUNTER_START: " .. rest .. " " .. ts)
+                local message = "ENCOUNTER_START: " .. rest
+                if serverTimeTag then
+                    message = message .. " " .. serverTimeTag
+                end
+                CombatLogAdd(message .. " " .. ts)
             elseif sync == "BossDeath" and rest then
                 local ts = FormatTimestamp()
+                local serverTimeTag = FormatServerTimeTag()
                 engagedBoss = nil
-                CombatLogAdd("ENCOUNTER_END: KILL " .. rest .. " " .. ts)
+                local message = "ENCOUNTER_END: KILL " .. rest
+                if serverTimeTag then
+                    message = message .. " " .. serverTimeTag
+                end
+                CombatLogAdd(message .. " " .. ts)
             end
         end
 
         function bwHandler:BigWigs_RebootModule(moduleName)
             if not SessionActive() or not engagedBoss then return end
             local ts = FormatTimestamp()
-            CombatLogAdd("ENCOUNTER_END: WIPE " .. engagedBoss .. " " .. ts)
+            local serverTimeTag = FormatServerTimeTag()
+            local message = "ENCOUNTER_END: WIPE " .. engagedBoss
+            if serverTimeTag then
+                message = message .. " " .. serverTimeTag
+            end
+            CombatLogAdd(message .. " " .. ts)
             engagedBoss = nil
         end
     end
