@@ -15,6 +15,7 @@ local sessionZone = nil
 
 local LoggingCombat = LoggingCombat
 local GetRealZoneText = GetRealZoneText
+local IsInInstance = IsInInstance
 local date = date
 local CHAT_PREFIX = "|cff00ff00[Captain's Log]|r "
 local StartLogging
@@ -194,6 +195,7 @@ end
 local function SyncZoneLogging()
     local zoneKey, zoneText = NormalizeZoneName(GetRealZoneText())
     local observedZone = zoneText or "Unknown Zone"
+    local inInstance = IsInInstance and IsInInstance("player")
 
     if SessionActive() and sessionZone ~= observedZone then
         EmitZoneTransition(sessionZone, observedZone, "zone_change")
@@ -211,6 +213,14 @@ local function SyncZoneLogging()
             StartLogging(raidZone, "auto", "zone_enter")
         end
         return
+    end
+
+    if sessionMode == "auto" then
+        local raidZone = zoneKey and RAID_ZONES[zoneKey] or nil
+        if not raidZone and not inInstance then
+            StopLogging("zone_exit")
+            return
+        end
     end
 
     EnsureLoggingEnabled()
