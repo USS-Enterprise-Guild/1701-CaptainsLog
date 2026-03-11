@@ -1058,6 +1058,11 @@ RPLL:SetScript("OnUpdate", function()
 	end
 	this.limit = now + 15 -- update combat state every 15 seconds in case logger isn't involved in the fight
 	logPlayersInCombat()
+
+	-- Flush the combat log opportunistically when available so idle tails land on disk.
+	if CombatLogFlush and not UnitAffectingCombat("player") then
+		CombatLogFlush()
+	end
 end)
 
 RPLL.PLAYER_REGEN_DISABLED = function()
@@ -1068,6 +1073,10 @@ end
 RPLL.PLAYER_REGEN_ENABLED = function()
 	CombatLogAdd("PLAYER_REGEN_ENABLED")
 	logPlayersInCombat()
+
+	if CombatLogFlush then
+		CombatLogFlush()
+	end
 end
 
 RPLL.UNIT_DIED = function(guid)

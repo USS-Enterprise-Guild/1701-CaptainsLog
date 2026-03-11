@@ -5,6 +5,7 @@ import re
 import shutil
 import time
 import zipfile
+from datetime import datetime
 
 # letter pattern including Unicode for unit names
 L = ",a-zA-Z\\u00C0-\\u017F"
@@ -37,6 +38,14 @@ def detect_player_names(lines):
     return player_entries
 
 
+def parse_log_timestamp(ts):
+    """
+    Parse a log timestamp string (M/D HH:MM:SS.mmm) into a datetime object
+    so chronological comparison works across single and double digit days.
+    """
+    return datetime.strptime("2000/" + ts, "%Y/%m/%d %H:%M:%S.%f")
+
+
 def get_player_name_for_timestamp(timestamp, player_entries):
     """
     Get the appropriate player name for a given timestamp.
@@ -48,8 +57,9 @@ def get_player_name_for_timestamp(timestamp, player_entries):
     # Find the most recent player entry that is at or before this timestamp
     current_player = player_entries[0][1]  # Default to first player
 
+    ts_dt = parse_log_timestamp(timestamp)
     for entry_timestamp, player_name in player_entries:
-        if entry_timestamp <= timestamp:
+        if parse_log_timestamp(entry_timestamp) <= ts_dt:
             current_player = player_name
         else:
             break

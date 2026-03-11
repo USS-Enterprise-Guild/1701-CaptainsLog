@@ -47,6 +47,7 @@ local function newHarness(opts)
     local logLines = {}
     local loggingCalls = {}
     local loggingEnabled = false
+    local flushCalls = 0
     local zone = opts.zone or "Zul'Gurub"
     local savedInstances = opts.savedInstances or {}
     local inventory = opts.inventory or {}
@@ -68,6 +69,9 @@ local function newHarness(opts)
 
     _G.CombatLogAdd = function(message)
         table.insert(logLines, message)
+    end
+    _G.CombatLogFlush = opts.combatLogFlush or function()
+        flushCalls = flushCalls + 1
     end
     _G.LoggingCombat = function(enabled)
         if enabled ~= nil then
@@ -198,6 +202,9 @@ local function newHarness(opts)
         loggingCalls = loggingCalls,
         registered = registered,
         onUpdate = onUpdate,
+        getFlushCalls = function()
+            return flushCalls
+        end,
         rpll = _G.RPLL,
         setZone = function(value)
             zone = value
@@ -406,6 +413,23 @@ local function testDeepSubstringHandlesTailTokensCorrectly()
     assertTrue(result == true, "expected DeepSubString to match against the final token")
 end
 
+local function testFlushesCombatLogWhenAvailable()
+    local now = 2
+    local ctx = newHarness({
+        getTime = function()
+            return now
+        end,
+        unitAffectingCombat = function()
+            return nil
+        end,
+    })
+
+    tick(ctx)
+    dispatchHandler(ctx, "PLAYER_REGEN_ENABLED")
+
+    assertTrue(ctx.getFlushCalls() == 2, "expected CombatLogFlush on idle OnUpdate and PLAYER_REGEN_ENABLED")
+end
+
 testRescansRaidRosterWhenHeadcountStaysFlat()
 testRetriesCombatantInfoWhenFirstScanHasNoGear()
 testEmitsOneAuthoritativeCastLinePerTrackedCast()
@@ -416,4 +440,5 @@ testNormalizesZoneInfoAliasesAndPreservesFallbackCase()
 testBroadensTradeDetectionBeyondAsciiWordNames()
 testUsesGuidCacheForUnitDied()
 testDeepSubstringHandlesTailTokensCorrectly()
+testFlushesCombatLogWhenAvailable()
 print("ok - SuperWowCombatLogger regression tests passed")
