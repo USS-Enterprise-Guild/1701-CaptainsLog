@@ -32,6 +32,13 @@ local function assertTrue(condition, message)
     end
 end
 
+local function readFile(path)
+    local handle = assert(io.open(path, "r"))
+    local contents = handle:read("*a")
+    handle:close()
+    return contents
+end
+
 local function makeItemLink(itemId, label)
     return "|cff1eff00|Hitem:" .. tostring(itemId) .. ":0:0:0|h[" .. label .. "]|h|r"
 end
@@ -430,6 +437,15 @@ local function testFlushesCombatLogWhenAvailable()
     assertTrue(ctx.getFlushCalls() == 2, "expected CombatLogFlush on idle OnUpdate and PLAYER_REGEN_ENABLED")
 end
 
+local function testAvoidsClassicIncompatibleLengthOperatorSyntax()
+    local source = readFile("SuperWowCombatLogger.lua")
+
+    assertTrue(
+        string.find(source, "parts%[%#parts %+", 1) == nil,
+        "expected SuperWowCombatLogger.lua to avoid classic-incompatible # length operator syntax"
+    )
+end
+
 testRescansRaidRosterWhenHeadcountStaysFlat()
 testRetriesCombatantInfoWhenFirstScanHasNoGear()
 testEmitsOneAuthoritativeCastLinePerTrackedCast()
@@ -441,4 +457,5 @@ testBroadensTradeDetectionBeyondAsciiWordNames()
 testUsesGuidCacheForUnitDied()
 testDeepSubstringHandlesTailTokensCorrectly()
 testFlushesCombatLogWhenAvailable()
+testAvoidsClassicIncompatibleLengthOperatorSyntax()
 print("ok - SuperWowCombatLogger regression tests passed")

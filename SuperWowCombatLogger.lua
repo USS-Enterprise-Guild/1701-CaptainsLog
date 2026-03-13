@@ -1019,7 +1019,7 @@ local function BuildRaidRosterSignature()
 	for i = 1, count do
 		local unit = "raid" .. i
 		local _, guid = UnitExists(unit)
-		parts[#parts + 1] = guid or UnitName(unit) or "nil"
+		tinsert(parts, guid or UnitName(unit) or "nil")
 	end
 
 	return table.concat(parts, "|")
