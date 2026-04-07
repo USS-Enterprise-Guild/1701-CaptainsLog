@@ -1,9 +1,9 @@
-# 1701 Captain's Log
+# 1701 Addons - Captains Log
 
 `1701-CaptainsLog` is a WoW 1.12.1 (Turtle WoW) guild logging addon that bundles:
 
 - **SuperWowCombatLogger (SWCL)** for enriched combat metadata
-- **Captain's Log wrapper logic** for session lifecycle, markers, and raid workflow quality-of-life
+- **Captains Log wrapper logic** for session lifecycle, markers, and raid workflow quality-of-life
 
 It is intended for guild raid logging with consistent data collection and simpler install/operations.
 
@@ -11,7 +11,7 @@ It is intended for guild raid logging with consistent data collection and simple
 
 - **SuperWowCombatLogger** by Shino/Pepopo: <https://github.com/Pepopo/SuperWowCombatLogger>
 - **SuperWoW** by balakethelock: <https://github.com/balakethelock/SuperWoW>
-- **Captain's Log wrapper/session layer** by USS Enterprise Guild
+- **Captains Log wrapper/session layer** by USS Enterprise Guild
 
 ## Why We Package SWCL
 
@@ -27,7 +27,7 @@ That mixed setup is not supported if you need the pinned/tested behavior in this
 
 ## What Our Wrapper Adds (Beyond SWCL)
 
-Captain's Log adds session-aware control and metadata around SWCL logging:
+Captains Log adds session-aware control and metadata around SWCL logging:
 
 - Auto mode starts in configured raid zones.
 - Auto mode stops when leaving raid context (out of instance), while avoiding mid-raid stops on intra-instance/subzone transitions.
@@ -43,7 +43,7 @@ Captain's Log adds session-aware control and metadata around SWCL logging:
 - Time metadata improvements:
   - timezone offset (`%z`) appended when client runtime supports it
   - `server_time=HH:MM` tag on zone enter/exit transitions and encounter start/end markers
-- Compatibility hook so Captain's Log can preserve managed session behavior when standalone SWCL handlers run.
+- Compatibility hook so Captains Log can preserve managed session behavior when standalone SWCL handlers run.
 - Upload helper scripts for post-raid archive/rotation workflow.
 
 ## SWCL Changes In This Packaged Version
@@ -129,6 +129,8 @@ Configured raid zones:
 ### Manual mode
 
 - `/captainslog` toggles mode/logging.
+- `/captainslog start` starts manual logging or locks an auto session into manual mode.
+- `/captainslog stop` stops the current logging session.
 - `/captainslog status` prints mode, zone, and logging state.
 
 ## Upload Workflow

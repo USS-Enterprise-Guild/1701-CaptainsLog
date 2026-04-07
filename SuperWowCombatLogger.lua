@@ -1396,25 +1396,31 @@ function RPLL:grab_unit_information(unit)
 			end
 		end
 
-		-- Talents
+		-- Talents (only available for the local player via GetTalentInfo)
 		if unit == "player" then
-			local talents = { "", "", "" };
+			local talents = { "", "", "" }
+			local ok = true
 			for t = 1, 3 do
-				local numTalents = GetNumTalents(t);
-				-- Last one is missing?
+				local numTalents = GetNumTalents(t)
+				if not numTalents or numTalents == 0 then
+					ok = false
+					break
+				end
 				for i = 1, numTalents do
-					local _, _, _, _, currRank = GetTalentInfo(t, i);
-					talents[t] = talents[t] .. currRank
+					local _, _, _, _, currRank = GetTalentInfo(t, i)
+					talents[t] = talents[t] .. (currRank or "0")
 				end
 			end
-			talents = strjoin("}", talents[1], talents[2], talents[3])
-			if strlen(talents) <= 10 then
-				talents = nil
+			if ok then
+				talents = strjoin("}", talents[1], talents[2], talents[3])
+				if strlen(talents) <= 10 then
+					ok = false
+				end
 			end
-
-			if talents ~= nil then
-				info["talents"] = talents
-			end
+			-- Fallback: emit a sentinel so parsers can still identify the
+			-- logging player even when the talent API is unavailable (e.g.
+			-- Turtle WoW 1.18.1+ changed the talent system).
+			info["talents"] = ok and talents or "0}0}0"
 		end
 
 		info["guid"] = "0x0"

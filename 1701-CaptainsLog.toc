@@ -1,11 +1,12 @@
 ## Interface: 11200
 ## Title: 1701 Addons - Captains Log
-## Notes: Combat logging with session management for USS Enterprise Guild. Includes SuperWowCombatLogger.
-## Author: USS Enterprise Guild (SuperWowCombatLogger by Shino/Pepopo)
+## Notes: Guild combat logging with session management and bundled SuperWowCombatLogger.
+## Author: USS Enterprise Guild
 ## OptionalDeps: SuperWowCombatLogger, BigWigs
-## Version: 1.4.4
+## Version: 1.5.1
 ## DefaultState: enabled
 
+Lib1701.lua
 RPLLCollector.lua
 SuperWowCombatLogger.lua
 CaptainsLog.lua

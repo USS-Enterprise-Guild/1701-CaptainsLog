@@ -3,9 +3,16 @@
 -- Part of 1701-CaptainsLog unified addon
 -- Requires: SuperWoW (for CombatLogAdd)
 
+local ADDON_NAME = "Captains Log"
+local PRIMARY_SLASH = "/captainslog"
+
 -- Guard: SuperWoW must be present for session markers
 if not CombatLogAdd then
-    DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[Captain's Log]|r SuperWoW required for session management.")
+    if Lib1701 and Lib1701.Error then
+        Lib1701.Error(ADDON_NAME, "SuperWoW required for session management.")
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[Captain's Log]|r SuperWoW required for session management.")
+    end
     return
 end
 
@@ -24,10 +31,22 @@ local GetGameTime = GetGameTime
 local GetTime = GetTime
 local unpack = unpack or table.unpack
 local date = date
-local CHAT_PREFIX = "|cff00ff00[Captain's Log]|r "
 local StartLogging
 
 local supportsTimezoneOffset = nil
+local Trim = Lib1701.Trim
+
+local function Message(text)
+    Lib1701.Message(ADDON_NAME, text)
+end
+
+local function Success(text)
+    Lib1701.Success(ADDON_NAME, text)
+end
+
+local function Warn(text)
+    Lib1701.Warn(ADDON_NAME, text)
+end
 
 local function FormatTimestamp()
     if supportsTimezoneOffset == nil then
@@ -49,15 +68,6 @@ local function FormatServerTimeTag()
         return nil
     end
     return "server_time=" .. string.format("%02d:%02d", hour, minute)
-end
-
-local function Trim(s)
-    if not s then
-        return ""
-    end
-    s = string.gsub(s, "^%s+", "")
-    s = string.gsub(s, "%s+$", "")
-    return s
 end
 
 local function SessionActive()
@@ -374,7 +384,7 @@ local function EnsureBigWigsTracking()
     end
 
     bigWigsTrackingEnabled = true
-    DEFAULT_CHAT_FRAME:AddMessage(CHAT_PREFIX .. "BigWigs detected, encounter tracking enabled")
+    Message("BigWigs detected, encounter tracking enabled.")
     return true
 end
 
@@ -441,7 +451,7 @@ StartLogging = function(zone, mode, reason)
         lastRaidLeader = leader
         CombatLogAdd("RAID_LEADER: " .. leader .. " " .. ts)
     end
-    DEFAULT_CHAT_FRAME:AddMessage(CHAT_PREFIX .. "Combat logging started for " .. zone)
+    Success("Combat logging started for " .. zone .. ".")
 end
 
 local function StopLogging(reason)
@@ -460,7 +470,7 @@ local function StopLogging(reason)
     pendingCombatResolution = false
     lastRaidLeader = nil
     ResetEncounterTracking()
-    DEFAULT_CHAT_FRAME:AddMessage("|cffff0000[Captain's Log]|r Combat logging stopped")
+    Warn("Combat logging stopped.")
 end
 
 local function EnsureLoggingEnabled()
@@ -544,7 +554,7 @@ local function EnsureSwclCompatibilityHook()
     if wrapped then
         swclCompatibilityHooked = true
         if IsAddOnLoaded and IsAddOnLoaded("SuperWowCombatLogger") and not swclCompatibilityWarned then
-            DEFAULT_CHAT_FRAME:AddMessage("|cffffff00[Captain's Log]|r Standalone SuperWowCombatLogger detected; compatibility hook enabled")
+            Warn("Standalone SuperWowCombatLogger detected; compatibility hook enabled.")
             swclCompatibilityWarned = true
         end
     end
@@ -613,7 +623,9 @@ EnsureSwclCompatibilityHook()
 
 frame:SetScript("OnEvent", function()
     if event == "ADDON_LOADED" then
-        if arg1 == "BigWigs" then
+        if arg1 == "1701-CaptainsLog" then
+            Lib1701.Loaded(ADDON_NAME, PRIMARY_SLASH)
+        elseif arg1 == "BigWigs" then
             EnsureBigWigsTracking()
         elseif arg1 == "SuperWowCombatLogger" then
             EnsureSwclCompatibilityHook()
@@ -641,24 +653,45 @@ frame:SetScript("OnUpdate", function()
     end
 end)
 
--- Slash command: /captainslog — manually toggle combat logging
-SLASH_CAPTAINSLOG1 = "/captainslog"
-SlashCmdList["CAPTAINSLOG"] = function(msg)
-    local command = string.lower(Trim(msg))
-
-    if command == "status" then
-        local zone = sessionZone
-        if not zone then
-            local _, zoneText = NormalizeZoneName(GetRealZoneText())
-            zone = zoneText or "Unknown Zone"
-        end
-        local loggingState = LoggingCombat() and "on" or "off"
-        DEFAULT_CHAT_FRAME:AddMessage(CHAT_PREFIX .. "Status: mode=" .. sessionMode .. " zone=" .. zone .. " logging=" .. loggingState)
-        return
+local function GetCurrentZoneLabel()
+    local zone = sessionZone
+    if zone then
+        return zone
     end
 
+    local _, zoneText = NormalizeZoneName(GetRealZoneText())
+    return zoneText or "Unknown Zone"
+end
+
+local function GetManualZone()
+    local zoneKey, zoneText = NormalizeZoneName(GetRealZoneText())
+    local zone = zoneText
+    if zoneKey and RAID_ZONES[zoneKey] then
+        zone = RAID_ZONES[zoneKey]
+    end
+    if not zone then
+        zone = "Unknown Zone"
+    end
+    return zone
+end
+
+local function ShowStatus()
+    local loggingState = LoggingCombat() and "on" or "off"
+    Message("Status: mode=" .. sessionMode .. " zone=" .. GetCurrentZoneLabel() .. " logging=" .. loggingState)
+end
+
+local function ShowHelp()
+    Message("Commands:")
+    DEFAULT_CHAT_FRAME:AddMessage("  /captainslog - Toggle manual logging or manual lock")
+    DEFAULT_CHAT_FRAME:AddMessage("  /captainslog start - Start or lock manual logging")
+    DEFAULT_CHAT_FRAME:AddMessage("  /captainslog stop - Stop the current logging session")
+    DEFAULT_CHAT_FRAME:AddMessage("  /captainslog status - Show current logging state")
+end
+
+local function StartManualLogging()
     if sessionMode == "manual" then
-        StopLogging("slash_stop")
+        Message("Manual logging is already active.")
+        EnsureLoggingEnabled()
         return
     end
 
@@ -666,24 +699,48 @@ SlashCmdList["CAPTAINSLOG"] = function(msg)
         EmitTransition("auto", "manual", "slash_manual_lock", sessionZone)
         sessionMode = "manual"
         EnsureLoggingEnabled()
-        DEFAULT_CHAT_FRAME:AddMessage(CHAT_PREFIX .. "Manual logging lock enabled")
+        Message("Manual logging lock enabled.")
         return
     end
 
-    if sessionMode == "idle" then
-        local zoneKey, zoneText = NormalizeZoneName(GetRealZoneText())
-        local zone = zoneText
-        if zoneKey and RAID_ZONES[zoneKey] then
-            zone = RAID_ZONES[zoneKey]
-        end
-        if not zone then
-            zone = "Unknown Zone"
-        end
-        StartLogging(zone, "manual", "slash_start")
-    else
-        -- Safety fallback for unexpected mode values.
-        if SessionActive() then
-            StopLogging("slash_stop")
-        end
+    StartLogging(GetManualZone(), "manual", "slash_start")
+end
+
+local function StopManualLogging()
+    if not SessionActive() then
+        Warn("No active logging session.")
+        return
+    end
+    StopLogging("slash_stop")
+end
+
+local function ToggleManualLogging()
+    if sessionMode == "manual" then
+        StopLogging("slash_stop")
+    elseif sessionMode == "auto" then
+        StartManualLogging()
+    elseif sessionMode == "idle" then
+        StartManualLogging()
+    elseif SessionActive() then
+        StopLogging("slash_stop")
     end
 end
+
+Lib1701.RegisterSlash({
+    id = "CAPTAINSLOG",
+    aliases = { PRIMARY_SLASH },
+    handler = function(command, _, raw)
+        command = command ~= "" and command or string.lower(Trim(raw))
+        if command == "" or command == "toggle" then
+            ToggleManualLogging()
+        elseif command == "start" then
+            StartManualLogging()
+        elseif command == "stop" then
+            StopManualLogging()
+        elseif command == "status" then
+            ShowStatus()
+        else
+            ShowHelp()
+        end
+    end,
+})

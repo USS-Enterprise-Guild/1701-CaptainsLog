@@ -53,6 +53,9 @@ local function newHarness(zoneProvider, opts)
     _G.CombatLogAdd = function(message)
         table.insert(combatLogLines, message)
     end
+    table.getn = table.getn or function(items)
+        return #items
+    end
     _G.LoggingCombat = function(enabled)
         if enabled ~= nil then
             if enabled == 0 or enabled == false then
@@ -122,6 +125,7 @@ local function newHarness(zoneProvider, opts)
         return frame
     end
 
+    dofile("Lib1701.lua")
     dofile("CaptainsLog.lua")
 
     return {
@@ -304,15 +308,15 @@ local function testStatusCommandReportsModeZoneAndLogging()
     end)
 
     _G.SlashCmdList["CAPTAINSLOG"]("status")
-    assertTrue(containsPrefix(ctx.chatLines, "|cff00ff00[Captain's Log]|r Status: mode=idle"), "expected idle status output")
+    assertTrue(containsText(ctx.chatLines, "Status: mode=idle"), "expected idle status output")
 
     dispatch(ctx, "ZONE_CHANGED_NEW_AREA")
     _G.SlashCmdList["CAPTAINSLOG"]("status")
-    assertTrue(containsPrefix(ctx.chatLines, "|cff00ff00[Captain's Log]|r Status: mode=auto zone=Zul'Gurub logging=on"), "expected auto status output")
+    assertTrue(containsText(ctx.chatLines, "Status: mode=auto zone=Zul'Gurub logging=on"), "expected auto status output")
 
     _G.SlashCmdList["CAPTAINSLOG"]()
     _G.SlashCmdList["CAPTAINSLOG"]("status")
-    assertTrue(containsPrefix(ctx.chatLines, "|cff00ff00[Captain's Log]|r Status: mode=manual zone=Zul'Gurub logging=on"), "expected manual status output")
+    assertTrue(containsText(ctx.chatLines, "Status: mode=manual zone=Zul'Gurub logging=on"), "expected manual status output")
 end
 
 local function testSessionTransitionMarkersIncludeReasons()

@@ -68,6 +68,9 @@ local function newHarness(opts)
     _G.UNKNOWNOBJECT = "Unknown"
     _G.strlower = string.lower
     _G.strlen = string.len
+    string.join = string.join or function(delim, ...)
+        return table.concat({...}, delim)
+    end
     _G.StaticPopupDialogs = {}
     _G.StaticPopup_Show = function() end
     _G.TEXT = function(text) return text end
@@ -458,4 +461,53 @@ testUsesGuidCacheForUnitDied()
 testDeepSubstringHandlesTailTokensCorrectly()
 testFlushesCombatLogWhenAvailable()
 testAvoidsClassicIncompatibleLengthOperatorSyntax()
+
+local function testTalentFallbackWhenGetNumTalentsReturnsZero()
+    local ctx = newHarness({
+        unitNames = { player = "TestDruid" },
+        unitExists = { player = { true, "0xDRUID" } },
+        inventory = { player = { [1] = makeItemLink(1001, "Helm") } },
+        getNumTalents = function() return 0 end,
+    })
+
+    dispatchMethod(ctx, "grab_unit_information", "player")
+    assertTrue(containsText(ctx.logLines, "&0}0}0&"), "expected fallback talent sentinel 0}0}0 when GetNumTalents returns 0")
+end
+
+local function testTalentFallbackWhenGetNumTalentsReturnsNil()
+    local ctx = newHarness({
+        unitNames = { player = "TestDruid" },
+        unitExists = { player = { true, "0xDRUID" } },
+        inventory = { player = { [1] = makeItemLink(1001, "Helm") } },
+        getNumTalents = function() return nil end,
+    })
+
+    dispatchMethod(ctx, "grab_unit_information", "player")
+    assertTrue(containsText(ctx.logLines, "&0}0}0&"), "expected fallback talent sentinel 0}0}0 when GetNumTalents returns nil")
+end
+
+local function testRealTalentsEmittedWhenAvailable()
+    local ctx = newHarness({
+        unitNames = { player = "TestDruid" },
+        unitExists = { player = { true, "0xDRUID" } },
+        inventory = { player = { [1] = makeItemLink(1001, "Helm") } },
+        getNumTalents = function(tree)
+            if tree == 1 then return 5
+            elseif tree == 2 then return 5
+            elseif tree == 3 then return 5
+            end
+        end,
+        getTalentInfo = function(tree, index)
+            return "TalentName", "icon", 1, 5, 3
+        end,
+    })
+
+    dispatchMethod(ctx, "grab_unit_information", "player")
+    assertTrue(containsText(ctx.logLines, "&33333}33333}33333&"), "expected real talent data when API is available")
+    assertTrue(not containsText(ctx.logLines, "0}0}0"), "expected no fallback sentinel when real talents are available")
+end
+
+testTalentFallbackWhenGetNumTalentsReturnsZero()
+testTalentFallbackWhenGetNumTalentsReturnsNil()
+testRealTalentsEmittedWhenAvailable()
 print("ok - SuperWowCombatLogger regression tests passed")
